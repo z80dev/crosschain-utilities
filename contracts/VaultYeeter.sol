@@ -26,10 +26,12 @@ contract VaultYeeter is IStargateReceiver {
 
     // certain functions should only be called by the trusted router
     IStargateRouter public immutable stargateRouter;
-    address public constant BEET_VAULT = address(0x20dd72Ed959b6147912C2e529F0a0C651c33c9ce);
+    address public immutable balVault;
+    // address public constant BALANCER_VAULT = address(0x20dd72Ed959b6147912C2e529F0a0C651c33c9ce);
 
-    constructor(IStargateRouter _stargateRouter) {
+    constructor(IStargateRouter _stargateRouter, address _balVault) {
         stargateRouter = _stargateRouter;
+        balVault = _balVault;
     }
 
     // this will hold all the data we need to:
@@ -43,6 +45,27 @@ contract VaultYeeter is IStargateReceiver {
         address lpToken; // needed for approval to deposit
         address vault;
         address recipient;
+    }
+
+    // this will hold data we need to fire off a cross-chain tx
+    struct BridgeParams {
+        uint16 dstChainId;
+        uint256 srcPoolId;
+        uint256 dstPoolId;
+        uint256 amount;
+        uint256 amountMin;
+        uint256 dustAmount;
+    }
+
+    // yeets funds cross-chain and into the desired vault
+    // v0 simple version: take existing USDC balance, bridge it with the right calldata
+    // later, we'll support swapping for USDC
+    // then, we'll support withdrawing vault shares, converting those to USDC
+    function yeet(YeetParams memory yeetparams, BridgeParams memory bridgeParams)
+        external
+        payable
+    {
+
     }
 
     function sgReceive(
@@ -105,8 +128,8 @@ contract VaultYeeter is IStargateReceiver {
         request.userData = userData;
         request.fromInternalBalance = false;
 
-        IERC20Upgradeable(address(underlyings[tokenIndex])).safeIncreaseAllowance(BEET_VAULT, amtIn);
-        IBeetVault(BEET_VAULT).joinPool(beetsPoolId, address(this), address(this), request);
+        IERC20Upgradeable(address(underlyings[tokenIndex])).safeIncreaseAllowance(balVault, amtIn);
+        IBeetVault(balVault).joinPool(beetsPoolId, address(this), address(this), request);
     }
 
 

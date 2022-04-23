@@ -52,19 +52,44 @@ contract VaultYeeter is IStargateReceiver {
         uint16 dstChainId;
         uint256 srcPoolId;
         uint256 dstPoolId;
+        address token;
         uint256 amount;
         uint256 amountMin;
         uint256 dustAmount;
+        address receiver; // contract address w/ sgReceive
     }
 
     // yeets funds cross-chain and into the desired vault
     // v0 simple version: take existing USDC balance, bridge it with the right calldata
     // later, we'll support swapping for USDC
     // then, we'll support withdrawing vault shares, converting those to USDC
-    function yeet(YeetParams memory yeetparams, BridgeParams memory bridgeParams)
+    function yeet(YeetParams memory yeetParams, BridgeParams memory bridgeParams)
         external
         payable
     {
+        // take user's funds
+        IERC20Upgradeable(bridgeParams.token).safeTransferFrom(msg.sender, address(this), bridgeParams.amount);
+
+        // construct payload
+        bytes memory payload = abi.encode(yeetParams);
+
+        stargateRouter.swap{value: address(this).balance}(
+            bridgeParams.dstChainId,
+            bridgeParams.srcPoolId,
+            bridgeParams.dstPoolId,
+            yeetParams.recipient,
+            bridgeParams.amount,
+            bridgeParams.amountMin,
+            IStargateRouter.lzTxObj(
+                500000, // works with 100k as well
+                bridgeParams.dustAmount,
+                abi.encodePacked(yeetParams.recipient)
+            ),
+            abi.encodePacked(bridgeParams.receiver),
+            payload
+        );
+
+)
 
     }
 

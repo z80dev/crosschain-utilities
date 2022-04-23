@@ -54,6 +54,7 @@
     "@nomiclabs/hardhat-etherscan": "^2.1.0",
     "@nomiclabs/hardhat-solhint": "^2.0.0",
     "@nomiclabs/hardhat-waffle": "^2.0.0",
+    "@openzeppelin/hardhat-upgrades": "^1.17.0",
     "@tenderly/hardhat-tenderly": "^1.0.0",
     "@typechain/ethers-v5": "^8.0.0",
     "@typechain/hardhat": "^3.1.0",
@@ -85,5 +86,8 @@
     "ts-node": "^10.4.0",
     "typechain": "^6.1.0",
     "typescript": "^4.5.0"
+  },
+  "dependencies": {
+    "@openzeppelin/contracts-upgradeable": "^4.5.2"
   }
 }

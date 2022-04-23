@@ -30,6 +30,7 @@ contract VaultYeeter is IStargateReceiver {
         // payload will contain all the data we need
         // what vault do we want to enter?
         // what LP token do we need?
+        // is this a balancer(beethoven) pool?
         //
         // should only support a very limited subset of tokens/vaults initally
         // find best USDC liquidity

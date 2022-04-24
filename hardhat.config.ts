@@ -28,6 +28,28 @@ if (process.env.PRIVATE_KEY) {
   };
 }
 
+const STG_FTM_ROUTER = "0xAf5191B0De278C7286d6C7CC6ab6BB8A73bA2Cd6";
+const STG_POLY_ROUTER = "0x45A01E4e04F14f7A4a6702c74187c5F6222033cd";
+
+const YEETER_ADDR = "0xB616Cd0208a0c21B043E8B4c10Bd2e8ec3a3Cc7C";
+
+task("quote", "Get quote from fantom to polygon", async (args, { ethers }) => {
+  const router = await ethers.getContractAt("IStargateRouter", STG_FTM_ROUTER);
+  const payload = ethers.utils.defaultAbiCoder.encode(["uint256"], [1]);
+  const quoteData = await router.quoteLayerZeroFee(
+    9,                 // destination chainId
+    1,               // function type: see Bridge.sol for all types
+    ethers.utils.defaultAbiCoder.encode(["tuple(address[], uint256, bytes32, address, address, address)"], ["0xB616Cd0208a0c21B043E8B4c10Bd2e8ec3a3Cc7C"]),                  // destination of tokens
+    payload,                         // payload, using abi.encode()
+    {
+      dstGasForCall: 100000,       // extra gas, if calling smart contract,
+      dstNativeAmount: 100,     // amount of dust dropped in destination wallet
+      dstNativeAddr: "0xB616Cd0208a0c21B043E8B4c10Bd2e8ec3a3Cc7C" // destination wallet for dust
+    }
+)
+  console.log(quoteData);
+});
+
 // This is a sample Hardhat task. To learn how to create your own go to
 // https://hardhat.org/guides/create-task.html
 task("accounts", "Prints the list of accounts", async (args, { ethers }) => {
@@ -44,11 +66,14 @@ const config: HardhatUserConfig = {
     disambiguatePaths: false,
     runOnCompile: true,
     strict: true,
-    only: [":Greeter$"],
+    only: [":VaultYeeter$"],
   },
   defaultNetwork: "hardhat",
   etherscan: {
-    apiKey: process.env.ETHERSCAN_API_KEY,
+    apiKey: {
+      mainnet: process.env.ETHERSCAN_API_KEY,
+      opera: process.env.FTMSCAN_API_KEY,
+    },
   },
   gasReporter: {
     coinmarketcap: process.env.COINMARKETCAP_API_KEY,
@@ -92,6 +117,18 @@ const config: HardhatUserConfig = {
       saveDeployments: true,
       tags: ["mainnet"],
       hardfork: process.env.CODE_COVERAGE ? "berlin" : "london",
+    },
+    opera: {
+      url: 'https://rpc.ftm.tools/',
+      accounts,
+      saveDeployments: true,
+      tags: ["fantom"]
+    },
+    polygon: {
+      url: 'https://polygon-rpc.com/',
+      accounts,
+      saveDeployments: true,
+      tags: ["polygon", "matic"]
     },
     ropsten: {
       url: `https://ropsten.infura.io/v3/${process.env.INFURA_API_KEY}`,

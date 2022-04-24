@@ -73,11 +73,13 @@ contract VaultYeeter is IStargateReceiver {
         // construct payload
         bytes memory payload = abi.encode(yeetParams);
 
+        IERC20Upgradeable(bridgeParams.token).safeIncreaseAllowance(address(stargateRouter), bridgeParams.amount);
+
         stargateRouter.swap{value: address(this).balance}(
             bridgeParams.dstChainId,
             bridgeParams.srcPoolId,
             bridgeParams.dstPoolId,
-            yeetParams.recipient,
+            payable(yeetParams.recipient),
             bridgeParams.amount,
             bridgeParams.amountMin,
             IStargateRouter.lzTxObj(
@@ -89,7 +91,6 @@ contract VaultYeeter is IStargateReceiver {
             payload
         );
 
-)
 
     }
 

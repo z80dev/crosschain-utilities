@@ -26,40 +26,81 @@
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 import "./interfaces/ILayerZeroEndpoint.sol";
-import "./interfaces/IXChainNFTRegistry.sol";
+import "./interfaces/IXChainContractRegistry.sol";
 import "./lzApp/NonblockingLzApp.sol";
 
 pragma solidity 0.8.11;
 
 contract NFTYeeter is IERC721Receiver, NonblockingLzApp {
 
-    IXChainNFTRegistry public immutable registry;
+
+    IXChainContractRegistry public immutable registry;
+    uint256 private immutable localChainId;
+    mapping(address => mapping(uint256 => DepositDetails)) deposits; // deposits[collection][tokenId] = depositor
+    mapping(uint256 => mapping(address => address)) localAddress; // localAddress[originChainId][collectionAddress]
 
     struct DepositDetails {
         address depositor;
         bool bridged;
-        uint256 dstChainId;
+        uint256 dstChainId; // do we need to track this? could change w/o notifying home
+                            // we could also "phone home" on bridging in order to notify
+                            // but this would require two bridge calls, one to phone home,
+                            // one to mint the new NFT on the new dstChainId
+                            //
+                            // we may want to know this for interface reasons, but don't
+                            // need to store this on-chain
     }
 
     struct BridgedTokenDetails {
         uint256 originChainId;
         address originAddress;
-        address localAddress;
         uint256 tokenId;
+        address owner;
     }
 
-    constructor(IXChainNFTRegistry _registry, address _endpoint) NonblockingLzApp(_endpoint) {
+    function getLocalAddress(uint256 originChainId, address originAddress) external view returns (address) {
+        return localAddress[originChainId][originAddress];
+    }
+
+    constructor(uint256 _localChainId,
+                IXChainContractRegistry _registry,
+                address _endpoint)
+        NonblockingLzApp(_endpoint)
+    {
+        localChainId = _localChainId;
         registry = _registry;
     }
 
-    mapping(address => mapping(uint256 => DepositDetails)) deposits; // deposits[collection][tokenId] = depositor
 
     function withdraw(address collection, uint256 tokenId) public {
-        require(deposits[collection][tokenId].depositor == msg.sender, "Unauth");
+        DepositDetails memory details = deposits[collection][tokenId];
+        require(details.bridged == false, "NFT Currently Bridged");
+        require(details.depositor == msg.sender, "Unauth");
         IERC721(collection).safeTransferFrom(address(this), msg.sender, tokenId);
     }
 
+    // this function handles being notified that a tokenId was bridged to this chain
     function _nonblockingLzReceive(uint16 _srcChainId, bytes memory _srcAddress, uint64 _nonce, bytes memory _payload) internal virtual override {
+        // check if this is a case of "bridging back" i.e. originChainId == localChainId
+        // if so, set bridged to false, and note new owner
+
+        (BridgedTokenDetails memory details) = abi.decode(_payload, (BridgedTokenDetails));
+
+        if (details.originChainId == localChainId) {
+            // we're bridging this NFT *back* home
+            DepositDetails storage depositDetails = deposits[details.originAddress][details.tokenId];
+
+            // record new owner to enable them to withdraw
+            depositDetails.depositor = details.owner;
+
+            // record that the NFT is *back* and does not exist on other chains
+            depositDetails.bridged = false;
+
+        } else if (localAddress[details.originChainId][details.originAddress] != address(0)) {
+            // local XERC721 contract exists, we just need to mint
+        } else {
+            // deploy new ERC721 contract
+        }
 
     }
 

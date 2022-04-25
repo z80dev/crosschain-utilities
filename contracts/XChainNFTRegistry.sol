@@ -15,5 +15,6 @@ contract XChainNFTRegistry is IXChainNFTRegistry {
     }
     function registerCollection(uint256 originChainId, address originAddress, string memory name, string memory symbol) external {
 
+        // deploy new ERC721 here
     }
 }

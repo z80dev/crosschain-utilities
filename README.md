@@ -1,5 +1,7 @@
 # Cross-Chain Utilities
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 Some cross-chain apps built to experiment with a few cross-chain technologies, including but not limited to:
 
 - Connext
@@ -23,7 +25,6 @@ Currently supports only moving USDC already in a user's wallet, into a balancer-
 
 Will be expanded to support withdrawing from, and depositing into, any vault for any token/LP.
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 ## Env
 

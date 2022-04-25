@@ -30,10 +30,16 @@ pragma solidity 0.8.11;
 
 contract NFTYeeter is IERC721Receiver {
 
-    mapping(address => mapping(uint256 => address)) deposits; // deposits[collection][tokenId] = depositor
+    struct DepositDetails {
+        address depositor;
+        bool bridged;
+        uint256 dstChainId;
+    }
+
+    mapping(address => mapping(uint256 => DepositDetails)) deposits; // deposits[collection][tokenId] = depositor
 
     function withdraw(address collection, uint256 tokenId) public {
-        require(deposits[collection][tokenId] == msg.sender, "Unauth");
+        require(deposits[collection][tokenId].depositor == msg.sender, "Unauth");
         IERC721(collection).safeTransferFrom(address(this), msg.sender, tokenId);
     }
 
@@ -52,8 +58,18 @@ contract NFTYeeter is IERC721Receiver {
         uint256 tokenId,
         bytes calldata data
     ) external returns (bytes4) {
-        deposits[msg.sender][tokenId] = from;
+        if (data.length > 0) {
+            (uint256 dstChainId) = abi.decode(data, (uint256));
+            _bridgeToken(msg.sender, tokenId, from, dstChainId);
+            deposits[msg.sender][tokenId] = DepositDetails({depositor: from, bridged: true, dstChainId: dstChainId});
+        } else {
+            deposits[msg.sender][tokenId] = DepositDetails({depositor: from, bridged: false, dstChainId: 0});
+        }
         return IERC721Receiver.onERC721Received.selector;
+    }
+
+    function _bridgeToken(address collection, uint256 tokenId, address recipient, uint256 dstChainId) internal {
+        //
     }
 
 }

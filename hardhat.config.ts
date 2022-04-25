@@ -66,7 +66,6 @@ const config: HardhatUserConfig = {
     disambiguatePaths: false,
     runOnCompile: true,
     strict: true,
-    only: [":VaultYeeter$"],
   },
   defaultNetwork: "hardhat",
   etherscan: {

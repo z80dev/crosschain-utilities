@@ -25,10 +25,15 @@
 
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
+import "./interfaces/ILayerZeroEndpoint.sol";
+import "./interfaces/IXChainNFTRegistry.sol";
+import "./lzApp/NonblockingLzApp.sol";
 
 pragma solidity 0.8.11;
 
-contract NFTYeeter is IERC721Receiver {
+contract NFTYeeter is IERC721Receiver, NonblockingLzApp {
+
+    IXChainNFTRegistry public immutable registry;
 
     struct DepositDetails {
         address depositor;
@@ -36,11 +41,26 @@ contract NFTYeeter is IERC721Receiver {
         uint256 dstChainId;
     }
 
+    struct BridgedTokenDetails {
+        uint256 originChainId;
+        address originAddress;
+        address localAddress;
+        uint256 tokenId;
+    }
+
+    constructor(IXChainNFTRegistry _registry, address _endpoint) NonblockingLzApp(_endpoint) {
+        registry = _registry;
+    }
+
     mapping(address => mapping(uint256 => DepositDetails)) deposits; // deposits[collection][tokenId] = depositor
 
     function withdraw(address collection, uint256 tokenId) public {
         require(deposits[collection][tokenId].depositor == msg.sender, "Unauth");
         IERC721(collection).safeTransferFrom(address(this), msg.sender, tokenId);
+    }
+
+    function _nonblockingLzReceive(uint16 _srcChainId, bytes memory _srcAddress, uint64 _nonce, bytes memory _payload) internal virtual override {
+
     }
 
     /**

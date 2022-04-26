@@ -26,6 +26,8 @@
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 import "./interfaces/ILayerZeroEndpoint.sol";
+import "./interfaces/IXERC721.sol";
+import "./XERC721.sol";
 import "./interfaces/IXChainContractRegistry.sol";
 import "./lzApp/NonblockingLzApp.sol";
 
@@ -35,9 +37,10 @@ contract NFTYeeter is IERC721Receiver, NonblockingLzApp {
 
 
     IXChainContractRegistry public immutable registry;
-    uint256 private immutable localChainId;
+    uint16 private immutable localChainId;
     mapping(address => mapping(uint256 => DepositDetails)) deposits; // deposits[collection][tokenId] = depositor
-    mapping(uint256 => mapping(address => address)) localAddress; // localAddress[originChainId][collectionAddress]
+    mapping(uint16 => mapping(address => address)) localAddress; // localAddress[originChainId][collectionAddress]
+    mapping(uint16 => mapping(address => IXERC721)) localContract; // localContract[originChainId][collectionAddress]
 
     struct DepositDetails {
         address depositor;
@@ -52,17 +55,20 @@ contract NFTYeeter is IERC721Receiver, NonblockingLzApp {
     }
 
     struct BridgedTokenDetails {
-        uint256 originChainId;
+        uint16 originChainId;
         address originAddress;
         uint256 tokenId;
         address owner;
+        string name;
+        string symbol;
+        string tokenURI;
     }
 
-    function getLocalAddress(uint256 originChainId, address originAddress) external view returns (address) {
+    function getLocalAddress(uint16 originChainId, address originAddress) external view returns (address) {
         return localAddress[originChainId][originAddress];
     }
 
-    constructor(uint256 _localChainId,
+    constructor(uint16 _localChainId,
                 IXChainContractRegistry _registry,
                 address _endpoint)
         NonblockingLzApp(_endpoint)
@@ -72,7 +78,7 @@ contract NFTYeeter is IERC721Receiver, NonblockingLzApp {
     }
 
 
-    function withdraw(address collection, uint256 tokenId) public {
+    function withdraw(address collection, uint256 tokenId) external {
         DepositDetails memory details = deposits[collection][tokenId];
         require(details.bridged == false, "NFT Currently Bridged");
         require(details.depositor == msg.sender, "Unauth");
@@ -98,8 +104,13 @@ contract NFTYeeter is IERC721Receiver, NonblockingLzApp {
 
         } else if (localAddress[details.originChainId][details.originAddress] != address(0)) {
             // local XERC721 contract exists, we just need to mint
+            IXERC721 nft = IXERC721(localAddress[details.originChainId][details.originAddress]);
+            nft.mint(details.owner, details.tokenId, details.tokenURI);
         } else {
             // deploy new ERC721 contract
+            XERC721 nft = new XERC721(details.name, details.symbol);
+            localAddress[details.originChainId][details.originAddress] = address(nft);
+            nft.mint(details.owner, details.tokenId, details.tokenURI);
         }
 
     }
@@ -120,7 +131,7 @@ contract NFTYeeter is IERC721Receiver, NonblockingLzApp {
         bytes calldata data
     ) external returns (bytes4) {
         if (data.length > 0) {
-            (uint256 dstChainId) = abi.decode(data, (uint256));
+            (uint16 dstChainId) = abi.decode(data, (uint16));
             _bridgeToken(msg.sender, tokenId, from, dstChainId);
             deposits[msg.sender][tokenId] = DepositDetails({depositor: from, bridged: true, dstChainId: dstChainId});
         } else {
@@ -129,8 +140,14 @@ contract NFTYeeter is IERC721Receiver, NonblockingLzApp {
         return IERC721Receiver.onERC721Received.selector;
     }
 
-    function _bridgeToken(address collection, uint256 tokenId, address recipient, uint256 dstChainId) internal {
-        //
+    function bytesToAddress(bytes memory bys) private pure returns (address addr) {
+        assembly {
+            addr := mload(add(bys, 32))
+        }
+    }
+
+    function _bridgeToken(address collection, uint256 tokenId, address recipient, uint16 dstChainId) internal {
+        address dstYeeter = bytesToAddress(trustedRemoteLookup[dstChainId]);
     }
 
 }

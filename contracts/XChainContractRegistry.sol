@@ -26,7 +26,7 @@ contract XChainContractRegistry is IXChainContractRegistry, NonblockingLzApp {
 
     // gets called to bridge contract, i.e. trigger deployment of erc721 on other chain
     // i.e. calling this on chain A results in _nonblockingLzReceive being called on chain B
-    function bridgeContract(uint256 dstChainId, address contract) external {
+    function bridgeContract(uint256 dstChainId, address _contract) external {
         // we need to send dstChain all the data it needs to deploy a valid erc721
         // initially we can only support contracts w/ a baseTokenURI...
 

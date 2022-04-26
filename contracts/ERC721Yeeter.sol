@@ -54,6 +54,9 @@ contract NFTYeeter is IERC721Receiver, NonblockingLzApp {
                             // need to store this on-chain
     }
 
+        // if this big payload makes bridging expensive, we should separate
+        // the process of bridging a collection (name, symbol) from bridging
+        // of tokens (tokenId, tokenUri)
     struct BridgedTokenDetails {
         uint16 originChainId;
         address originAddress;

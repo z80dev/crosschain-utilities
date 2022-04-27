@@ -112,6 +112,15 @@ contract NFTYeeter is IERC721Receiver, NonblockingLzApp {
 
     }
 
+
+    function onERC721Received(
+        address operator,
+        address from,
+        uint256 tokenId,
+    ) external returns (bytes4) {
+        return IERC721Receiver.onERC721Received.selector;
+    }
+
     /**
      * @dev Whenever an {IERC721} `tokenId` token is transferred to this contract via {IERC721-safeTransferFrom}
      * by `operator` from `from`, this function is called.
@@ -127,13 +136,17 @@ contract NFTYeeter is IERC721Receiver, NonblockingLzApp {
         uint256 tokenId,
         bytes calldata data
     ) external returns (bytes4) {
-        if (data.length > 0) {
-            (uint16 dstChainId) = abi.decode(data, (uint16));
-            _bridgeToken(msg.sender, tokenId, from, dstChainId);
-            deposits[msg.sender][tokenId] = DepositDetails({depositor: from, bridged: true });
-        } else {
-            deposits[msg.sender][tokenId] = DepositDetails({depositor: from, bridged: false });
-        }
+        // not sure if this function can be payable
+        //
+        // if so, uncomment all this
+        // if (data.length > 0) {
+        //     (uint16 dstChainId) = abi.decode(data, (uint16));
+        //     _bridgeToken(msg.sender, tokenId, from, dstChainId);
+        //     deposits[msg.sender][tokenId] = DepositDetails({depositor: from, bridged: true });
+        // } else {
+        //     deposits[msg.sender][tokenId] = DepositDetails({depositor: from, bridged: false });
+        // }
+        deposits[msg.sender][tokenId] = DepositDetails({depositor: from, bridged: false });
         return IERC721Receiver.onERC721Received.selector;
     }
 

@@ -116,7 +116,7 @@ contract NFTYeeter is IERC721Receiver, NonblockingLzApp {
     function onERC721Received(
         address operator,
         address from,
-        uint256 tokenId,
+        uint256 tokenId
     ) external returns (bytes4) {
         return IERC721Receiver.onERC721Received.selector;
     }

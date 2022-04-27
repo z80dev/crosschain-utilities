@@ -24,6 +24,7 @@
 // import "@rari-capital/solmate/src/tokens/ERC721.sol";
 
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
+import "@openzeppelin/contracts/token/ERC721/extensions/IERC721Metadata.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 import "./interfaces/ILayerZeroEndpoint.sol";
 import "./interfaces/IXERC721.sol";
@@ -35,28 +36,20 @@ pragma solidity 0.8.11;
 
 contract NFTYeeter is IERC721Receiver, NonblockingLzApp {
 
-
-    IXChainContractRegistry public immutable registry;
     uint16 private immutable localChainId;
     mapping(address => mapping(uint256 => DepositDetails)) deposits; // deposits[collection][tokenId] = depositor
     mapping(uint16 => mapping(address => address)) localAddress; // localAddress[originChainId][collectionAddress]
-    mapping(uint16 => mapping(address => IXERC721)) localContract; // localContract[originChainId][collectionAddress]
 
+    // this is maintained on each "Home" chain where an NFT is originally locked
     struct DepositDetails {
         address depositor;
         bool bridged;
-        uint256 dstChainId; // do we need to track this? could change w/o notifying home
-                            // we could also "phone home" on bridging in order to notify
-                            // but this would require two bridge calls, one to phone home,
-                            // one to mint the new NFT on the new dstChainId
-                            //
-                            // we may want to know this for interface reasons, but don't
-                            // need to store this on-chain
     }
 
-        // if this big payload makes bridging expensive, we should separate
-        // the process of bridging a collection (name, symbol) from bridging
-        // of tokens (tokenId, tokenUri)
+    // this is used to mint new NFTs upon receipt
+    // if this big payload makes bridging expensive, we should separate
+    // the process of bridging a collection (name, symbol) from bridging
+    // of tokens (tokenId, tokenUri)
     struct BridgedTokenDetails {
         uint16 originChainId;
         address originAddress;
@@ -72,16 +65,15 @@ contract NFTYeeter is IERC721Receiver, NonblockingLzApp {
     }
 
     constructor(uint16 _localChainId,
-                IXChainContractRegistry _registry,
                 address _endpoint)
         NonblockingLzApp(_endpoint)
     {
         localChainId = _localChainId;
-        registry = _registry;
     }
 
 
     function withdraw(address collection, uint256 tokenId) external {
+        require(IERC721(collection).ownerOf(tokenId) == address(this), "NFT Not Deposited");
         DepositDetails memory details = deposits[collection][tokenId];
         require(details.bridged == false, "NFT Currently Bridged");
         require(details.depositor == msg.sender, "Unauth");
@@ -89,9 +81,11 @@ contract NFTYeeter is IERC721Receiver, NonblockingLzApp {
     }
 
     // this function handles being notified that a tokenId was bridged to this chain
-    function _nonblockingLzReceive(uint16 _srcChainId, bytes memory _srcAddress, uint64 _nonce, bytes memory _payload) internal virtual override {
+    function _nonblockingLzReceive(uint16 _srcChainId, bytes memory _srcAddress, uint64, bytes memory _payload) internal virtual override {
         // check if this is a case of "bridging back" i.e. originChainId == localChainId
         // if so, set bridged to false, and note new owner
+        bool isTrustedRemote = keccak256(trustedRemoteLookup[_srcChainId]) == keccak256(_srcAddress);
+        require(isTrustedRemote, "Unauth Remote");
 
         (BridgedTokenDetails memory details) = abi.decode(_payload, (BridgedTokenDetails));
 
@@ -111,7 +105,7 @@ contract NFTYeeter is IERC721Receiver, NonblockingLzApp {
             nft.mint(details.owner, details.tokenId, details.tokenURI);
         } else {
             // deploy new ERC721 contract
-            XERC721 nft = new XERC721(details.name, details.symbol);
+            XERC721 nft = new XERC721(details.name, details.symbol, details.originAddress, details.originChainId);
             localAddress[details.originChainId][details.originAddress] = address(nft);
             nft.mint(details.owner, details.tokenId, details.tokenURI);
         }
@@ -136,9 +130,9 @@ contract NFTYeeter is IERC721Receiver, NonblockingLzApp {
         if (data.length > 0) {
             (uint16 dstChainId) = abi.decode(data, (uint16));
             _bridgeToken(msg.sender, tokenId, from, dstChainId);
-            deposits[msg.sender][tokenId] = DepositDetails({depositor: from, bridged: true, dstChainId: dstChainId});
+            deposits[msg.sender][tokenId] = DepositDetails({depositor: from, bridged: true });
         } else {
-            deposits[msg.sender][tokenId] = DepositDetails({depositor: from, bridged: false, dstChainId: 0});
+            deposits[msg.sender][tokenId] = DepositDetails({depositor: from, bridged: false });
         }
         return IERC721Receiver.onERC721Received.selector;
     }
@@ -149,8 +143,41 @@ contract NFTYeeter is IERC721Receiver, NonblockingLzApp {
         }
     }
 
+    function bridgeToken(address collection, uint256 tokenId, address recipient, uint16 dstChainId) external {
+        require(IERC721(collection).ownerOf(tokenId) == address(this));
+        require(deposits[collection][tokenId].depositor == msg.sender);
+        require(deposits[collection][tokenId].bridged == false);
+        _bridgeToken(collection, tokenId, recipient, dstChainId);
+    }
+
     function _bridgeToken(address collection, uint256 tokenId, address recipient, uint16 dstChainId) internal {
-        address dstYeeter = bytesToAddress(trustedRemoteLookup[dstChainId]);
+        // should check length first
+        // this will let us differentiate b/w evm addrs and cosmos addrs in the future
+        // address dstYeeter = bytesToAddress(trustedRemoteLookup[dstChainId]);
+        bytes memory dstYeeter = trustedRemoteLookup[dstChainId];
+        require(dstYeeter.length > 0, "Chain not supported");
+        IERC721Metadata nft = IERC721Metadata(collection);
+        bytes memory payload = abi.encode(BridgedTokenDetails(localChainId,
+                                                                            collection,
+                                                                            tokenId,
+                                                                            recipient,
+                                                                            nft.name(),
+                                                                            nft.symbol(),
+                                                                            nft.tokenURI(tokenId)
+                                                                            ));
+        lzEndpoint.send{value: msg.value}(
+                                        dstChainId,
+                                        dstYeeter,
+                                        payload,
+                                        payable(msg.sender),
+                                        address(0x0),
+                                        abi.encode(
+                                                   uint16(2),
+                                                   uint(1000000),
+                                                   uint(0),
+                                                   recipient
+)
+                                        );
     }
 
 }

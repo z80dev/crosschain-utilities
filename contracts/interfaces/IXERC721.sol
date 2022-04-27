@@ -11,4 +11,6 @@ pragma solidity 0.8.11;
 
 interface IXERC721 {
     function mint(address _to, uint256 _id, string memory _tokenURI) external;
+    function originAddress() external view returns (address);
+    function originChainId() external view returns (uint16);
 }
